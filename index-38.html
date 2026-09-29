@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Step Counter</title>
+<style>
+:root{--bg:#f2f6f3;--ink:#10362e;--muted:#5d7a71;--track:#cfe0d8;--accent:#e8590c;--card:#fff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1f1b;--ink:#e6f2ec;--muted:#8fb0a4;--track:#23403a;--card:#162b26}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;justify-content:center}
+main{width:100%;max-width:440px;padding:20px 18px 32px}
+h1{font-size:1.1rem;font-weight:600;margin:0 0 4px}
+.date{color:var(--muted);font-size:.9rem;margin-bottom:18px}
+.ring{position:relative;width:min(78vw,300px);aspect-ratio:1;margin:0 auto 18px}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:16;stroke-linecap:round}
+.ring .t{stroke:var(--track)}
+.ring .p{stroke:var(--accent);transition:stroke-dashoffset .4s}
+.center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.count{font-size:3.6rem;font-weight:800;font-variant-numeric:tabular-nums;line-height:1}
+.of{color:var(--muted);font-size:.9rem;margin-top:6px}
+.row{display:flex;gap:10px;margin-bottom:12px}
+.card{flex:1;background:var(--card);border-radius:14px;padding:12px;text-align:center}
+.card b{display:block;font-size:1.2rem;font-variant-numeric:tabular-nums}
+.card span{color:var(--muted);font-size:.8rem}
+button{font:inherit;border:0;border-radius:14px;padding:14px;cursor:pointer;flex:1;font-weight:600}
+button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+#go{background:var(--accent);color:#fff}
+#go.on{background:var(--ink);color:var(--bg)}
+.ghost{background:var(--card);color:var(--ink)}
+#msg{color:var(--muted);font-size:.85rem;min-height:1.2em;margin:0 0 14px;text-align:center}
+h2{font-size:.95rem;margin:20px 0 10px}
+.week{display:flex;align-items:flex-end;gap:8px;height:110px;background:var(--card);border-radius:14px;padding:12px}
+.day{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:4px;font-size:.7rem;color:var(--muted)}
+.bar{width:100%;background:var(--track);border-radius:6px;min-height:3px}
+.bar.hit{background:var(--accent)}
+label{display:flex;align-items:center;justify-content:space-between;background:var(--card);border-radius:14px;padding:12px 14px;margin-top:12px}
+input{font:inherit;width:6.5em;text-align:right;border:1px solid var(--track);background:transparent;color:var(--ink);border-radius:8px;padding:6px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Today's steps</h1>
+  <div class="date" id="date"></div>
+
+  <div class="ring">
+    <svg viewBox="0 0 200 200"><circle class="t" cx="100" cy="100" r="88"/><circle class="p" id="ring" cx="100" cy="100" r="88"/></svg>
+    <div class="center"><div class="count" id="count">0</div><div class="of" id="of"></div></div>
+  </div>
+
+  <div class="row">
+    <div class="card"><b id="km">0.00</b><span>km</span></div>
+    <div class="card"><b id="kcal">0</b><span>kcal</span></div>
+    <div class="card"><b id="pct">0%</b><span>of goal</span></div>
+  </div>
+
+  <div class="row"><button id="go">Start counting</button><button class="ghost" id="reset">Reset today</button></div>
+  <p id="dbg" style="text-align:center;font-size:.8rem;color:var(--muted);margin:-8px 0 14px"></p>
+  <p id="msg">Tap Start, keep the phone in your pocket, and walk. Keep this page open.</p>
+
+  <h2>Last 7 days</h2>
+  <div class="week" id="week"></div>
+
+  <label>Daily goal (steps) <input id="goal" type="number" min="500" step="500" inputmode="numeric"></label>
+</main>
+
+<script>
+(function(){
+  var KEY='stepcounter.v1';
+  var state={goal:6000,days:{}};
+  try{var s=JSON.parse(localStorage.getItem(KEY));if(s&&s.days)state=s;}catch(e){}
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}}
+  function todayKey(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+  function steps(){return state.days[todayKey()]||0;}
+
+  var $=function(id){return document.getElementById(id)};
+  var C=2*Math.PI*88;
+  $('ring').style.strokeDasharray=C;
+
+  function render(){
+    var n=steps(),g=state.goal,p=Math.min(n/g,1);
+    $('count').textContent=n.toLocaleString();
+    $('of').textContent='of '+g.toLocaleString()+' steps';
+    $('ring').style.strokeDashoffset=C*(1-p);
+    $('km').textContent=(n*0.00075).toFixed(2);
+    $('kcal').textContent=Math.round(n*0.04);
+    $('pct').textContent=Math.round(n/g*100)+'%';
+    $('date').textContent=new Date().toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'});
+    $('goal').value=g;
+    var w=$('week');w.innerHTML='';
+    var max=g;
+    for(var i=6;i>=0;i--){
+      var d=new Date();d.setDate(d.getDate()-i);
+      var k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      var v=state.days[k]||0;max=Math.max(max,v);
+    }
+    for(i=6;i>=0;i--){
+      d=new Date();d.setDate(d.getDate()-i);
+      k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      v=state.days[k]||0;
+      var col=document.createElement('div');col.className='day';
+      var bar=document.createElement('div');bar.className='bar'+(v>=g?' hit':'');
+      bar.style.height=Math.max(3,v/max*80)+'%';
+      bar.title=v+' steps';
+      var lb=document.createElement('div');lb.textContent=d.toLocaleDateString(undefined,{weekday:'short'}).slice(0,2);
+      col.appendChild(bar);col.appendChild(lb);w.appendChild(col);
+    }
+  }
+
+  // step detection
+  var evts=0,lastDbg=0,running=false,base=9.8,sm=0,prev=0,last=0,lastDay=todayKey();
+  function onMotion(e){
+    var a=e.accelerationIncludingGravity;if(!a||a.x==null)return;
+    evts++;
+    var m=Math.sqrt(a.x*a.x+a.y*a.y+a.z*a.z);
+    base=base*0.9+m*0.1;
+    sm=sm*0.6+(m-base)*0.4;
+    var now=Date.now();
+    if(now-lastDbg>250){lastDbg=now;$('dbg').textContent='Sensor OK - movement: '+Math.abs(sm).toFixed(1);}
+    if(prev<=0.9&&sm>0.9&&now-last>300){
+      last=now;
+      var k=todayKey();
+      if(k!==lastDay){lastDay=k;}
+      state.days[k]=(state.days[k]||0)+1;
+      if(state.days[k]%10===0)save();
+      render();
+    }
+    prev=sm;
+  }
+
+  function start(){
+    var go=function(){
+      window.addEventListener('devicemotion',onMotion);
+      running=true;$('go').textContent='Stop counting';$('go').classList.add('on');
+      $('msg').textContent='Counting... keep this page open and the screen on.';
+      requestWake();
+      evts=0;$('dbg').textContent='Waiting for sensor...';
+      setTimeout(function(){if(running&&evts===0){$('dbg').textContent='No sensor data';$('msg').textContent='Browser is blocking the motion sensor. Host this file on an https link (Netlify Drop / GitHub Pages) and allow Motion sensors in site settings.';}},2500);
+    };
+    if(typeof DeviceMotionEvent==='undefined'){$('msg').textContent='This browser has no motion sensor. Open the file in Chrome (Android) or Safari (iPhone).';return;}
+    if(typeof DeviceMotionEvent.requestPermission==='function'){
+      DeviceMotionEvent.requestPermission().then(function(r){
+        if(r==='granted')go();else $('msg').textContent='Motion permission denied. Allow it in browser settings.';
+      }).catch(function(){$('msg').textContent='Motion permission needs a secure (https) page.';});
+    }else go();
+  }
+  function stop(){
+    window.removeEventListener('devicemotion',onMotion);
+    running=false;save();$('go').textContent='Start counting';$('go').classList.remove('on');
+    $('msg').textContent='Paused. Your steps are saved on this phone.';
+  }
+  var wake=null;
+  function requestWake(){try{if(navigator.wakeLock)navigator.wakeLock.request('screen').then(function(l){wake=l;}).catch(function(){});}catch(e){}}
+  document.addEventListener('visibilitychange',function(){
+    if(document.visibilityState==='visible'){render();if(running)requestWake();}
+    else save();
+  });
+
+  $('go').addEventListener('click',function(){running?stop():start();});
+  $('reset').addEventListener('click',function(){
+    if(confirm("Reset today's steps to 0?")){state.days[todayKey()]=0;save();render();}
+  });
+  $('goal').addEventListener('change',function(){
+    var v=parseInt($('goal').value,10);
+    if(v>=500){state.goal=v;save();render();}
+  });
+  setInterval(render,60000);
+  render();
+})();
+</script>
+</body>
+</html>
